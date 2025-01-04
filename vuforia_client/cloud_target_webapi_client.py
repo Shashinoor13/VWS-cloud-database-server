@@ -163,8 +163,8 @@ class CloudTargetWebAPIClient:
     def __init__(self, vws_client: VuforiaVwsClient):
         self.vws_client = vws_client
 
-    def create_target(self, image: Path, name: str, width: float, metadata_base64: str | None,
-                      active: bool | None) -> Response:
+    def create_target(self, image: Path, name: str, width: float, metadata_base64: str,
+                      active: bool) -> Response:
         logger.info(f"Creating Cloud Reco Target '{name}' from {image}...")
         image_base64 = base64.b64encode(open(image, "rb").read()).decode()
         data = {
@@ -190,8 +190,8 @@ class CloudTargetWebAPIClient:
         response = self.vws_client.get(f"/targets/{target_id}")
         return self.vws_client.ensure_success(response)
 
-    def update_target(self, target_id: str, image: Path | None, name: str | None, width: float | None,
-                      metadata_base64: str | None, active: bool | None) -> Response:
+    def update_target(self, target_id: str, image: Path , name: str , width: float ,
+                      metadata_base64: str , active: bool) -> Response:
         logger.info(f"Updating Cloud Reco Target '{target_id}'...")
         data = {}
 
