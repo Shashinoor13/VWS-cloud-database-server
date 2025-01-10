@@ -10,3 +10,7 @@ pydantic
 uvicorn
 python-multipart
 python-dotenv
+motor
+fastapi-cache
+fastapi-cache2
+fastapi-cli

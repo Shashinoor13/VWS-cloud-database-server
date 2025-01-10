@@ -30,7 +30,6 @@ from requests.auth import AuthBase
 
 logger = logging.getLogger(__name__)
 
-
 class VwsAuthentication(AuthBase):
     """Authenticate VWS requests."""
 
