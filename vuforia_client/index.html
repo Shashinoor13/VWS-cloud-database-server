@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vuforia Image Gallery</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 30px;
+        }
+        .gallery {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 20px;
+        }
+        .image-card {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            overflow: hidden;
+            transition: transform 0.3s ease;
+        }
+        .image-card:hover {
+            transform: translateY(-5px);
+        }
+        .image-container {
+            height: 200px;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-color: #eee;
+        }
+        .image-container img {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+        }
+        .info {
+            padding: 15px;
+        }
+        .info h3 {
+            margin-top: 0;
+            margin-bottom: 10px;
+            font-size: 18px;
+            color: #444;
+        }
+        .rating {
+            display: flex;
+            align-items: center;
+            margin-top: 10px;
+        }
+        .rating-bar {
+            flex-grow: 1;
+            height: 10px;
+            background-color: #e0e0e0;
+            border-radius: 5px;
+            overflow: hidden;
+            margin-right: 10px;
+        }
+        .rating-fill {
+            height: 100%;
+            background-color: #4CAF50;
+        }
+        /* Rating color based on value */
+        .rating-excellent .rating-fill { background-color: #4CAF50; }
+        .rating-good .rating-fill { background-color: #8BC34A; }
+        .rating-average .rating-fill { background-color: #FFC107; }
+        .rating-poor .rating-fill { background-color: #FF9800; }
+        .rating-bad .rating-fill { background-color: #F44336; }
+        
+        .rating-value {
+            font-weight: bold;
+            min-width: 40px;
+        }
+        .target-id {
+            color: #777;
+            font-size: 12px;
+            word-break: break-all;
+        }
+        .no-data {
+            text-align: center;
+            grid-column: 1 / -1;
+            padding: 40px;
+            background: white;
+            border-radius: 8px;
+        }
+        .loading {
+            text-align: center;
+            padding: 20px;
+        }
+        /* Controls */
+        .controls {
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .sort-options {
+            display: flex;
+            gap: 10px;
+        }
+        .sort-options button {
+            padding: 8px 12px;
+            background-color: white;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .sort-options button.active {
+            background-color: #007bff;
+            color: white;
+            border-color: #007bff;
+        }
+        .search {
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            width: 200px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Vuforia Image Gallery with Tracking Ratings</h1>
+    
+    <div class="controls">
+        <div class="sort-options">
+            <button id="sort-name" onclick="sortGallery('name')">Sort by Name</button>
+            <button id="sort-rating" class="active" onclick="sortGallery('rating')">Sort by Rating</button>
+        </div>
+        <input type="text" class="search" id="search-input" placeholder="Search by name..." oninput="filterGallery()">
+    </div>
+    
+    <div id="gallery" class="gallery">
+        <div class="loading">Loading images and data...</div>
+    </div>
+
+    <script>
+        // Data array to store CSV information
+        let galleryData = [];
+        let currentSort = 'rating'; // Default sort
+        let currentSortDirection = -1; // -1 for descending, 1 for ascending
+        
+        // Function to fetch and parse CSV
+        async function loadCSVData() {
+            try {
+                const response = await fetch('./vuforia_results.csv');
+                const csvText = await response.text();
+                
+                // Parse CSV
+                const lines = csvText.split('\n');
+                const headers = lines[0].split(',');
+                
+                for (let i = 1; i < lines.length; i++) {
+                    if (lines[i].trim() === '') continue;
+                    
+                    const values = lines[i].split(',');
+                    const entry = {};
+                    
+                    headers.forEach((header, index) => {
+                        entry[header.trim()] = values[index]?.trim() || '';
+                    });
+                    
+                    // Convert tracking_rating to number
+                    if (entry.tracking_rating) {
+                        entry.tracking_rating = parseFloat(entry.tracking_rating);
+                    }
+                    
+                    galleryData.push(entry);
+                }
+                
+                renderGallery();
+            } catch (error) {
+                console.error('Error loading CSV:', error);
+                document.getElementById('gallery').innerHTML = `
+                    <div class="no-data">
+                        <h3>Error Loading Data</h3>
+                        <p>Could not load the CSV file. Make sure 'vuforia_results.csv' is in the same directory as this HTML file.</p>
+                        <p>Error: ${error.message}</p>
+                    </div>
+                `;
+            }
+        }
+        
+        // Function to render the gallery
+        function renderGallery() {
+            const galleryEl = document.getElementById('gallery');
+            
+            if (galleryData.length === 0) {
+                galleryEl.innerHTML = `
+                    <div class="no-data">
+                        <h3>No Data Available</h3>
+                        <p>No image data found in the CSV file.</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            // Sort the data
+            galleryData.sort((a, b) => {
+                if (currentSort === 'name') {
+                    return currentSortDirection * a.name.localeCompare(b.name);
+                } else {
+                    // Handle null/undefined ratings
+                    const ratingA = a.tracking_rating !== undefined ? a.tracking_rating : -1;
+                    const ratingB = b.tracking_rating !== undefined ? b.tracking_rating : -1;
+                    return currentSortDirection * (ratingB - ratingA);
+                }
+            });
+            
+            // Generate HTML for each image
+            const galleryHTML = galleryData.map(item => {
+                const rating = item.tracking_rating !== undefined ? item.tracking_rating : 'N/A';
+                const ratingPercent = rating !== 'N/A' ? rating * 20 : 0; // Assuming rating is 0-5, convert to percentage
+                
+                // Determine rating class
+                let ratingClass = 'rating-bad';
+                if (rating !== 'N/A') {
+                    if (rating >= 4) ratingClass = 'rating-excellent';
+                    else if (rating >= 3) ratingClass = 'rating-good';
+                    else if (rating >= 2) ratingClass = 'rating-average';
+                    else if (rating >= 1) ratingClass = 'rating-poor';
+                }
+                
+                // Construct proper image path
+                const imagePath = item.file_path.replace(/\\/g, '/'); // Replace backslashes with forward slashes
+                
+                return `
+                    <div class="image-card" data-name="${item.name.toLowerCase()}">
+                        <div class="image-container">
+                            <img src="${imagePath}" alt="${item.name}" onerror="this.src='placeholder.png'; this.alt='Image not found'">
+                        </div>
+                        <div class="info">
+                            <h3>${item.name}</h3>
+                            <div class="target-id">ID: ${item.target_id || 'N/A'}</div>
+                            <div class="rating ${ratingClass}">
+                                <div class="rating-bar">
+                                    <div class="rating-fill" style="width: ${ratingPercent}%"></div>
+                                </div>
+                                <span class="rating-value">${rating !== 'N/A' ? rating.toFixed(1) : 'N/A'}</span>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+            
+            galleryEl.innerHTML = galleryHTML;
+        }
+        
+        // Function to sort the gallery
+        function sortGallery(sortBy) {
+            // If clicking the same sort button, toggle direction
+            if (currentSort === sortBy) {
+                currentSortDirection *= -1;
+            } else {
+                currentSort = sortBy;
+                currentSortDirection = sortBy === 'rating' ? -1 : 1; // Default: rating=descending, name=ascending
+            }
+            
+            // Update active button
+            document.getElementById('sort-name').classList.toggle('active', sortBy === 'name');
+            document.getElementById('sort-rating').classList.toggle('active', sortBy === 'rating');
+            
+            renderGallery();
+        }
+        
+        // Function to filter gallery by name
+        function filterGallery() {
+            const searchTerm = document.getElementById('search-input').value.toLowerCase();
+            const cards = document.querySelectorAll('.image-card');
+            
+            cards.forEach(card => {
+                const name = card.getAttribute('data-name');
+                if (name.includes(searchTerm)) {
+                    card.style.display = '';
+                } else {
+                    card.style.display = 'none';
+                }
+            });
+        }
+        
+        // Load data when page loads
+        window.addEventListener('DOMContentLoaded', loadCSVData);
+    </script>
+</body>
+</html>
